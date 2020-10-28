@@ -61,6 +61,27 @@
          (compile-command (s-join " " (apply #'list command args))))
     compile-command))
 
+(defun runc--initialize-process-buffer (runnable)
+  "Initializes the buffer for a process."
+  (let ((buffname (runc--buffer-name runnable)))
+    (when (get-buffer buffname)
+      (kill-buffer buffname))
+    (let ((buff (get-buffer-create buffname)))
+      (with-current-buffer buff
+        (insert "------------------------------------------------------------")
+        (insert "\nStart: ")
+        (insert (format-time-string "%a %b %d %H:%M:%S %Z %Y" (current-time)))
+        (insert "\nProgram: ")
+        (prin1 (runc-runnable-program runnable) buff)
+        (insert "\nArgs: ")
+        (prin1 (runc-runnable-default-args runnable) buff)
+        (insert "\nDirectory: ")
+        (prin1 (runc--default-dir runnable) buff)
+        (insert "\n------------------------------------------------------------")
+        (insert "\n")
+        (compilation-mode))
+      buff)))
+
 ;; Runners
 (defclass runc-i-runner ()
   ()
@@ -81,12 +102,9 @@
          (buffname (runc--buffer-name runnable))
          (program (runc-runnable-program runnable))
          (args (runc-runnable-default-args runnable))
-         (_ (when (get-buffer buffname)
-              (kill-buffer buffname)))
+         (buff (runc--initialize-process-buffer runnable))
          (process (apply #'start-process buffname buffname program args)))
     (set-process-filter process #'compilation-filter)
-    (with-current-buffer buffname
-      (compilation-mode))
     (display-buffer buffname)))
 
 
@@ -114,7 +132,7 @@
              (make-runc-runnable :program ,program
                                  :directory ,directory
                                  :name ,name
-                                 :default-args default-args))
+                                 :default-args ,default-args))
        (defun ,defname ()
          ,(s-concat "Runs the runnable with name `" name "`.")
          (interactive)
