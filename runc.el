@@ -45,8 +45,34 @@
   (let ((name (runc-runnable-name runnable)))
     (cond
      (name (s-concat "*" name "*"))
-     :else "*Runnable*")))
+     (:else "*Runnable*"))))
 
+
+;; Runners
+(defclass runc-i-runner ()
+  ()
+  "Interface class for a runner (that runs a runnable)"
+  :abstract t)
+
+(cl-defmethod runc--runner-run ((runner runc-i-runner) runnable)
+  "Runs a runnable using a runner."
+  (error "Missing implementation"))
+
+(defclass runc-simple-runner (runc-i-runner)
+  ()
+  "Simple runner using *process* and a new filter.")
+
+(cl-defmethod runc--runner-run ((runner runc-simple-runner) runnable)
+  (let* ((default-directory (runc--default-dir runnable))
+         (buffname (runc--buffer-name runnable))
+         (command (runc-runnable-command runnable))
+         (_ (when (get-buffer buffname)
+              (kill-buffer buffname)))
+         (process (start-process buffname buffname command)))
+    (set-process-filter process #'compilation-filter)
+    (with-current-buffer buffname
+      (compilation-mode))
+    (display-buffer buffname)))
 
 ;; API
 (defun runc-run (runnable)
