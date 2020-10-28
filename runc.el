@@ -21,10 +21,12 @@
 ;;; Commentary:
 
 ;;
-(require 'cl-lib)
 
 ;;; Code:
-
+(require 'cl-lib)
+(require 'dash)
+(require 's)
+(require 'eieio)
 
 ;; Vars
 (defvar runc-default-runner nil "An instace of `runc-i-runner` used to run the commands.")
@@ -52,6 +54,12 @@
      (name (s-concat "*" name "*"))
      (:else "*Runnable*"))))
 
+(defun runc--compile-command (runnable)
+  "Returns a compile command for a runnable."
+  (let* ((command (runc-runnable-program runnable))
+         (args (--map (shell-quote-argument it) (runc-runnable-default-args runnable)))
+         (compile-command (s-join " " (apply #'list command args))))
+    compile-command))
 
 ;; Runners
 (defclass runc-i-runner ()
@@ -89,9 +97,7 @@
 (cl-defmethod runc--runner-run ((runner runc-compilation-runner) runnable)
   (let* ((default-directory (runc--default-dir runnable))
          (compilation-buffer-name-function (-const (runc--buffer-name runnable)))
-         (command (runc-runnable-program runnable))
-         (args (--map (shell-quote-argument it) (runc-runnable-default-args runnable)))
-         (compile-command (s-join " " (apply #'list command args))))
+         (compile-command (runc--compile-command runnable)))
     (call-interactively #'compile)))
 
 ;; API
@@ -100,12 +106,15 @@
   (let ((runner* (or runner runc-default-runner (runc-simple-runner))))
     (runc--runner-run runner* runnable)))
 
-(cl-defmacro runc-def (defname &key program directory name)
+(cl-defmacro runc-def (defname &key program directory name default-args)
   "Defines a runnable and a function to run it."
   (let ((runnable-symbol (-> defname symbol-name (s-concat "-runnable") intern)))
     `(progn
        (setq ,runnable-symbol
-             (make-runc-runnable :program ,program :directory ,directory :name ,name))
+             (make-runc-runnable :program ,program
+                                 :directory ,directory
+                                 :name ,name
+                                 :default-args default-args))
        (defun ,defname ()
          ,(s-concat "Runs the runnable with name `" name "`.")
          (interactive)
