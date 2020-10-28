@@ -1,9 +1,10 @@
 ;;; runc-test.el --- Tests for runc
 
 ;; A mock for a runner
-(defclass runc-test-runner (runc-i-runner) ((runnable)))
-(cl-defmethod runc--runner-run ((runner runc-test-runner) runnable)
-  (oset runner runnable runnable))
+(defclass runc-test-runner (runc-i-runner) ((runnable) (args)))
+(cl-defmethod runc--runner-run ((runner runc-test-runner) runnable args)
+  (oset runner runnable runnable)
+  (oset runner args args))
 
 (ert-deftest tunc--initialize-process-buffer/writes-header ()
   (let ((runnable (make-runc-runnable :program "echo"
@@ -36,10 +37,17 @@
          (result (runc--compile-command runnable)))
     (should (equal result "echo foo\\ bar \\!\\@\\#"))))
 
+(ert-deftest runc--compile-command/with-args ()
+  (let* ((runnable (make-runc-runnable :program "echo" :default-args '("foo bar" "!@#")))
+         (result (runc--compile-command runnable '("bab bobo" "bu!"))))
+    (should (equal result "echo bab\\ bobo bu\\!"))))
+
 (ert-deftest runc-run-test/calls-runner-with-runnable ()
   (let* ((runner (runc-test-runner))
-         (runnable (make-runc-runnable)))
-    (runc-run runnable runner)
-    (should (equal runnable (oref runner runnable)))))
+         (runnable (make-runc-runnable))
+         (args '("foo")))
+    (runc-run runnable args runner)
+    (should (equal runnable (oref runner runnable)))
+    (should (equal args (oref runner args)))))
 
 ;;; runc-test.el ends here

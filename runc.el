@@ -54,10 +54,12 @@
      (name (s-concat "*" name "*"))
      (:else "*Runnable*"))))
 
-(defun runc--compile-command (runnable)
-  "Returns a compile command for a runnable."
+(defun runc--compile-command (runnable &optional args)
+  "Returns a string for `compile-command` to run a runnable with `args`.
+   If passed, `args` must be a list of string arguments."
   (let* ((command (runc-runnable-program runnable))
-         (args (--map (shell-quote-argument it) (runc-runnable-default-args runnable)))
+         (args (or args (runc-runnable-default-args runnable)))
+         (args (--map (shell-quote-argument it) args))
          (compile-command (s-join " " (apply #'list command args))))
     compile-command))
 
@@ -88,22 +90,22 @@
   "Interface class for a runner (that runs a runnable)"
   :abstract t)
 
-(cl-defmethod runc--runner-run ((runner runc-i-runner) runnable)
-  "Runs a runnable using a runner."
+(cl-defmethod runc--runner-run ((runner runc-i-runner) runnable &optional args)
+  "Runs a runnable using a runner. `args` is an optional list of arguments for the cmd."
   (error "Missing implementation"))
 
 
 (defclass runc-simple-runner (runc-i-runner)
   ()
-  "Simple runner using *process* and a new filter.")
+  "Simple runner using *process* and a new buffer.")
 
-(cl-defmethod runc--runner-run ((runner runc-simple-runner) runnable)
+(cl-defmethod runc--runner-run ((runner runc-simple-runner) runnable &optional args)
   (let* ((default-directory (runc--default-dir runnable))
          (buffname (runc--buffer-name runnable))
          (program (runc-runnable-program runnable))
-         (args (runc-runnable-default-args runnable))
+         (args* (or args (runc-runnable-default-args runnable)))
          (buff (runc--initialize-process-buffer runnable))
-         (process (apply #'start-process buffname buffname program args)))
+         (process (apply #'start-process buffname buffname program args*)))
     (set-process-filter process #'compilation-filter)
     (display-buffer buffname)))
 
@@ -112,17 +114,17 @@
   ()
   "Runner based on Compilation mode, calling `compile` interactively.")
 
-(cl-defmethod runc--runner-run ((runner runc-compilation-runner) runnable)
+(cl-defmethod runc--runner-run ((runner runc-compilation-runner) runnable &optional args)
   (let* ((default-directory (runc--default-dir runnable))
          (compilation-buffer-name-function (-const (runc--buffer-name runnable)))
-         (compile-command (runc--compile-command runnable)))
+         (compile-command (runc--compile-command runnable args)))
     (call-interactively #'compile)))
 
 ;; API
-(defun runc-run (runnable &optional runner)
+(defun runc-run (runnable &optional args runner)
   "Runs a runnable."
   (let ((runner* (or runner runc-default-runner (runc-simple-runner))))
-    (runc--runner-run runner* runnable)))
+    (runc--runner-run runner* runnable args)))
 
 (cl-defmacro runc-def (defname &key program directory name default-args)
   "Defines a runnable and a function to run it."
@@ -133,10 +135,10 @@
                                  :directory ,directory
                                  :name ,name
                                  :default-args ,default-args))
-       (defun ,defname ()
+       (defun ,defname (&optional args)
          ,(s-concat "Runs the runnable with name `" name "`.")
          (interactive)
-         (runc-run ,runnable-symbol)))))
+         (runc-run ,runnable-symbol args)))))
 
 (put 'runc-def 'lisp-indent-function 1)
 
