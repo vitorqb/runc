@@ -63,7 +63,10 @@
          (compile-command (s-join " " (apply #'list command args))))
     compile-command))
 
-(defun runc--initialize-process-buffer (runnable)
+(defun runc--args-for-run (runnable args)
+  (or args (runc-runnable-default-args runnable)))
+
+(defun runc--initialize-process-buffer (runnable &optional args)
   "Initializes the buffer for a process."
   (let ((buffname (runc--buffer-name runnable)))
     (when (get-buffer buffname)
@@ -76,7 +79,7 @@
         (insert "\nProgram: ")
         (prin1 (runc-runnable-program runnable) buff)
         (insert "\nArgs: ")
-        (prin1 (runc-runnable-default-args runnable) buff)
+        (prin1 (runc--args-for-run runnable args) buff)
         (insert "\nDirectory: ")
         (prin1 (runc--default-dir runnable) buff)
         (insert "\n------------------------------------------------------------")
@@ -103,8 +106,8 @@
   (let* ((default-directory (runc--default-dir runnable))
          (buffname (runc--buffer-name runnable))
          (program (runc-runnable-program runnable))
-         (args* (or args (runc-runnable-default-args runnable)))
-         (buff (runc--initialize-process-buffer runnable))
+         (args* (runc--args-for-run runnable args))
+         (buff (runc--initialize-process-buffer runnable args))
          (process (apply #'start-process buffname buffname program args*)))
     (set-process-filter process #'compilation-filter)
     (display-buffer buffname)))
