@@ -68,6 +68,40 @@
          (result (runc--compile-command runnable '("bab bobo" "bu!"))))
     (should (equal result "echo --k1 v1 bab\\ bobo bu\\!"))))
 
+(ert-deftest test/runc--long-line-re/base ()
+  (let ((runc-process-buffer-max-line-length 221))
+    (should (equal "^.\\{221\\}.*$" (runc--long-line-re)))))
+
+(ert-deftest test/runc--truncate-large-lines-buffer-end/base ()
+  (let ((runc-process-buffer-max-line-length 20))
+    (with-temp-buffer
+      (insert
+       (s-join "\n"
+               '("LINE1"
+                 "LAAAAAAAAAAAAAAARGE LINE 1"
+                 "SHORT3"
+                 "LAAAAAAAAAAAAAAARGE LINE 2"
+                 "[[TRUNCATED LINE]]"
+                 "[[TRUNCATED LINE]]FOO"
+                 "LAAAAAAAAAAAAAAARGE LINE 3"
+                 "LAAAAAAAAAAAAAAARGE LINE 4"
+                 "SHORT4"
+                 "SHORT5")))
+      (runc--truncate-large-lines-buffer-end 52)
+      (should
+       (equal
+        (buffer-string)
+        (s-join "\n"
+                '("LINE1"
+                  "LAAAAAAAAAAAAAAARGE LINE 1"
+                  "SHORT3"
+                  "[[TRUNCATED LINE]]"
+                  "[[TRUNCATED LINE]]"
+                  "[[TRUNCATED LINE]]"
+                  "[[TRUNCATED LINE]]"
+                  "[[TRUNCATED LINE]]"
+                  "SHORT4"
+                  "SHORT5")))))))
 
 (ert-deftest runc-run-test/calls-runner-with-runnable ()
   (let* ((runner (runc-test-runner))

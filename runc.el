@@ -90,8 +90,24 @@
       buff)))
 
 ;; Truncate long lines filter
+(defun runc--long-line-re ()
+  (s-concat "^.\\{" (int-to-string runc-process-buffer-max-line-length) "\\}.*$"))
+
+(defun runc--truncate-large-lines-buffer-end (start)
+  "Truncates all large lines from `start` to buffer end."
+  (save-excursion
+    (goto-char start)
+    (goto-char (line-beginning-position))
+    (while (re-search-forward (runc--long-line-re) nil t)
+      (replace-match "[[TRUNCATED LINE]]")))
+  (save-excursion
+    (goto-char start)
+    (goto-char (line-beginning-position))
+    (while (re-search-forward "^\\[\\[TRUNCATED LINE\\]\\].*$" nil t)
+      (replace-match "[[TRUNCATED LINE]]"))))
+
 (defun runc--truncate-large-lines-compilation-filter (proc string)
-  "This fn is a copy of `compilation-fn`, but it forces all lines to have at most
+  "This fn is a copy of `compilation-filter`, but it forces all lines to have at most
 runc-process-buffer-max-line-length."
   (when (buffer-live-p (process-buffer proc))
     (with-current-buffer (process-buffer proc)
@@ -105,18 +121,7 @@ runc-process-buffer-max-line-length."
 	      (widen)
 	      (goto-char compilation-filter-start)
               (insert string)
-              (save-excursion
-                (goto-char compilation-filter-start)
-                (goto-char (line-beginning-position))
-                (let ((long-line-reg (s-concat "^.\\{" (int-to-string runc-process-buffer-max-line-length) "\\}.*$")))
-                  (message long-line-reg)
-                  (while (re-search-forward long-line-reg nil t)
-                    (replace-match "[[TRUNCATED LINE]]"))))
-              (save-excursion
-                (goto-char compilation-filter-start)
-                (goto-char (line-beginning-position))
-                (while (re-search-forward "^\\[\\[TRUNCATED LINE\\]\\].*$" nil t)
-                  (replace-match "[[TRUNCATED LINE]]")))
+              (runc--truncate-large-lines-buffer-end compilation-filter-start)
               (unless comint-inhibit-carriage-motion
                 (comint-carriage-motion (process-mark proc) (point)))
               (set-marker (process-mark proc) (point))
