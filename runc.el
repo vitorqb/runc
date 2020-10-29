@@ -30,7 +30,7 @@
 
 ;; Vars
 (defvar runc-default-runner nil "An instace of `runc-i-runner` used to run the commands.")
-
+(defvar runc-process-buffer-max-line-length 1000 "Maximum line length for a process buffer.")
 
 ;; Base data
 (cl-defstruct runc-runnable
@@ -89,6 +89,45 @@
         (compilation-mode))
       buff)))
 
+;; Truncate long lines filter
+(defun runc--truncate-large-lines-compilation-filter (proc string)
+  "This fn is a copy of `compilation-fn`, but it forces all lines to have at most
+runc-process-buffer-max-line-length."
+  (when (buffer-live-p (process-buffer proc))
+    (with-current-buffer (process-buffer proc)
+      (let ((inhibit-read-only t)
+            (pos (copy-marker (point) t))
+            (min (point-min-marker))
+	    (max (copy-marker (point-max) t))
+	    (compilation-filter-start (marker-position (process-mark proc))))
+        (unwind-protect
+            (progn
+	      (widen)
+	      (goto-char compilation-filter-start)
+              (insert string)
+              (save-excursion
+                (goto-char compilation-filter-start)
+                (goto-char (line-beginning-position))
+                (let ((long-line-reg (s-concat "^.\\{" (int-to-string runc-process-buffer-max-line-length) "\\}.*$")))
+                  (message long-line-reg)
+                  (while (re-search-forward long-line-reg nil t)
+                    (replace-match "[[TRUNCATED LINE]]"))))
+              (save-excursion
+                (goto-char compilation-filter-start)
+                (goto-char (line-beginning-position))
+                (while (re-search-forward "^\\[\\[TRUNCATED LINE\\]\\].*$" nil t)
+                  (replace-match "[[TRUNCATED LINE]]")))
+              (unless comint-inhibit-carriage-motion
+                (comint-carriage-motion (process-mark proc) (point)))
+              (set-marker (process-mark proc) (point))
+              (compilation--ensure-parse (point))
+              (run-hooks 'compilation-filter-hook))
+	  (goto-char pos)
+          (narrow-to-region min max)
+	  (set-marker pos nil)
+	  (set-marker min nil)
+	  (set-marker max nil))))))
+
 ;; Runners
 (defclass runc-i-runner ()
   ()
@@ -111,7 +150,7 @@
          (args* (runc--args-for-run runnable args))
          (buff (runc--initialize-process-buffer runnable args))
          (process (apply #'start-process buffname buffname program args*)))
-    (set-process-filter process #'compilation-filter)
+    (set-process-filter process #'runc--truncate-large-lines-compilation-filter)
     (display-buffer buffname)))
 
 
