@@ -27,6 +27,27 @@
              "------------------------------------------------------------"
              ""))))))))
 
+(ert-deftest test/runc--args-for-run/with-base-args ()
+  (should (equal '("base1" "base2" "default1" "default2")
+                 (runc--args-for-run (make-runc-runnable :default-args '("default1" "default2")
+                                                         :base-args '("base1" "base1"))
+                                     '()))))
+
+(ert-deftest test/runc--args-for-run/with-base-args ()
+  (should (equal '("default1" "default2")
+                 (runc--args-for-run (make-runc-runnable :default-args '("default1" "default2"))
+                                     '()))))
+
+(ert-deftest test/runc--args-for-run/with-runtime-args ()
+  (should (equal '("base1" "runtime1")
+                 (runc--args-for-run (make-runc-runnable :default-args '("default1" "default2")
+                                                         :base-args '("base1"))
+                                     '("runtime1")))))
+
+(ert-deftest test/runc--args-for-run/with-base-and-runtime ()
+  (should (equal '("1" "2" "3" "4")
+                 (runc--args-for-run (make-runc-runnable :base-args '("1" "2")) '("3" "4")))))
+
 (ert-deftest runc--compile-command/simple-command ()
   (let* ((runnable (make-runc-runnable :program "whoami"))
          (result (runc--compile-command runnable)))
@@ -41,6 +62,12 @@
   (let* ((runnable (make-runc-runnable :program "echo" :default-args '("foo bar" "!@#")))
          (result (runc--compile-command runnable '("bab bobo" "bu!"))))
     (should (equal result "echo bab\\ bobo bu\\!"))))
+
+(ert-deftest runc--compile-command/with-base-args ()
+  (let* ((runnable (make-runc-runnable :program "echo" :base-args '("--k1" "v1")))
+         (result (runc--compile-command runnable '("bab bobo" "bu!"))))
+    (should (equal result "echo --k1 v1 bab\\ bobo bu\\!"))))
+
 
 (ert-deftest runc-run-test/calls-runner-with-runnable ()
   (let* ((runner (runc-test-runner))

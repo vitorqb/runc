@@ -37,6 +37,7 @@
   "Defines a runnable command."
   (program nil :type 'string :documentation "A string containing the program to run.")
   (default-args nil :type 'list :documentation "The default args to be passed to program.")
+  (base-args nil :type 'list :documentation "List of arguments that will ALWAYS be passed to program.")
   (directory nil :type 'string :documentation "The default directory to use for running `program`.")
   (name nil :type 'string :documentation "A name to identify this runnable."))
 
@@ -54,17 +55,18 @@
      (name (s-concat "*" name "*"))
      (:else "*Runnable*"))))
 
+(defun runc--args-for-run (runnable args)
+  (-concat
+   (runc-runnable-base-args runnable)
+   (or args (runc-runnable-default-args runnable))))
+
 (defun runc--compile-command (runnable &optional args)
   "Returns a string for `compile-command` to run a runnable with `args`.
    If passed, `args` must be a list of string arguments."
   (let* ((command (runc-runnable-program runnable))
-         (args (or args (runc-runnable-default-args runnable)))
-         (args (--map (shell-quote-argument it) args))
-         (compile-command (s-join " " (apply #'list command args))))
+         (args* (--map (shell-quote-argument it) (runc--args-for-run runnable args)))
+         (compile-command (s-join " " (apply #'list command args*))))
     compile-command))
-
-(defun runc--args-for-run (runnable args)
-  (or args (runc-runnable-default-args runnable)))
 
 (defun runc--initialize-process-buffer (runnable &optional args)
   "Initializes the buffer for a process."
@@ -129,7 +131,7 @@
   (let ((runner* (or runner runc-default-runner (runc-simple-runner))))
     (runc--runner-run runner* runnable args)))
 
-(cl-defmacro runc-def (defname &key program directory name default-args)
+(cl-defmacro runc-def (defname &key program directory name default-args base-args)
   "Defines a runnable and a function to run it."
   (let ((runnable-symbol (-> defname symbol-name (s-concat "-runnable") intern)))
     `(progn
@@ -137,7 +139,8 @@
              (make-runc-runnable :program ,program
                                  :directory ,directory
                                  :name ,name
-                                 :default-args ,default-args))
+                                 :default-args ,default-args
+                                 :base-args ,base-args))
        (defun ,defname (&optional args)
          ,(s-concat "Runs the runnable with name `" name "`.")
          (interactive)
