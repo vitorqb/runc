@@ -42,7 +42,7 @@
   (name nil :type 'string :documentation "A name to identify this runnable."))
 
 
-;; Helpers
+;; Methods for runnable
 (defun runc--default-dir (runnable)
   "Returns the default directory to use for a runnable."
   (or (runc-runnable-directory runnable)
@@ -175,20 +175,64 @@ runc-process-buffer-max-line-length."
   (let ((runner* (or runner runc-default-runner (runc-simple-runner))))
     (runc--runner-run runner* runnable args)))
 
-(cl-defmacro runc-def (defname &key program directory name default-args base-args)
-  "Defines a runnable and a function to run it."
-  (let ((runnable-symbol (-> defname symbol-name (s-concat "-runnable") intern)))
-    `(progn
-       (setq ,runnable-symbol
-             (make-runc-runnable :program ,program
-                                 :directory ,directory
-                                 :name ,name
-                                 :default-args ,default-args
-                                 :base-args ,base-args))
-       (defun ,defname (&optional args)
-         ,(s-concat "Runs the runnable with name `" name "`.")
-         (interactive)
-         (runc-run ,runnable-symbol args)))))
+(cl-defmacro runc-def (defname &key program directory name default-args base-args transient)
+  "Defines a command.
+
+`defname` - The base name for the functions that will call the command.
+`program` - The program to execute.
+`directory` - Optional default directory that will be set before executing the program.
+`name` - A name identifying this command.
+`default-args` - Optional default arguments for the program (if no areguments are passed at runtime)
+`base-args` - Optional base arguments, which are always given to `command` before any runtime args.
+`transient` - Optional. If present, the value for this key must be a list containing `transient` groups, just like the vectors given to `transient-define-prefix`.
+
+   This macro will define:
+
+1. A function called `defname`, which accepts optional args and runs the command.
+2. A `runnable` instance called `defname/runnable`, containing the runnable for this command.
+
+   If `transient` is defined, this macro will further define:
+
+3. A transient prefix called `defname/transient`, that can be used to call the function with arguments specified by the transient groups.
+4. A function called `defname/run-from-transient`, which can be used as a suffix for the transient.
+
+   As an example, the following will generate a fn to call the ls function, as well as a transiento with the principal flags that can be given.
+
+(runc-def ls-command
+  :name \"LsCommand\"
+  :program \"ls\"
+  :directory (expand-file-name \"~\")
+  :transient ([\"Options\" (\"l\" \"Print in a list\" \"-l\")
+                         (\"a\" \"Print hidden files\" \"-a\")
+                         (\"h\" \"Human readable\" \"-h\")]
+              [\"Actions\" (\"r\" \"Run\" ls-command/run-from-transient)]))
+"
+  (let ((runnable-symbol (-> defname symbol-name (s-concat "/runnable") intern))
+        (transient-symbol (-> defname symbol-name (s-concat "/transient") intern))
+        (run-from-transient-symbol (-> defname symbol-name (s-concat "/run-from-transient") intern))
+        (has-transient? (not (equal (length transient) 0))))
+    (list
+     `progn
+     `(setq ,runnable-symbol
+            (make-runc-runnable :program ,program
+                                :directory ,directory
+                                :name ,name
+                                :default-args ,default-args
+                                :base-args ,base-args))
+     `(defun ,defname (&optional args)
+        ,(s-concat "Runs the runnable with name `" name "`.")
+        (interactive)
+        (runc-run ,runnable-symbol args))
+     
+     (when has-transient?
+       `(defun ,run-from-transient-symbol (args)
+          (interactive (list (transient-args ',transient-symbol)))
+          (,defname (-flatten args))))
+
+     (when has-transient?
+       `(transient-define-prefix ,transient-symbol ()
+          ,name
+          ,@transient)))))
 
 (put 'runc-def 'lisp-indent-function 1)
 
