@@ -5,3 +5,4 @@
 (depends-on "s")
 (depends-on "ert-runner")
 (depends-on "eieio")
+(depends-on "transient")

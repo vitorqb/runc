@@ -27,6 +27,7 @@
 (require 'dash)
 (require 's)
 (require 'eieio)
+(require 'transient)
 
 ;; Vars
 (defvar runc-default-runner nil "An instace of `runc-i-runner` used to run the commands.")
@@ -132,6 +133,15 @@ runc-process-buffer-max-line-length."
 	  (set-marker pos nil)
 	  (set-marker min nil)
 	  (set-marker max nil))))))
+
+;; Transient extensions
+(defclass runc-transient-shortarg (transient-option) ()
+  "Infix equal to `transient-option`, but that returns a value as (list argument value)
+instead of (concat argument value). Usefull for sending commands to runc.")
+
+(cl-defmethod transient-infix-value ((obj runc-transient-shortarg))
+  (when-let ((value (oref obj value)))
+    (list (oref obj argument) value)))
 
 ;; Runners
 (defclass runc-i-runner ()
