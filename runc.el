@@ -156,7 +156,7 @@ instead of (concat argument value). Usefull for sending commands to runc.")
 
 (defclass runc-simple-runner (runc-i-runner)
   ()
-  "Simple runner using *process* and a new buffer.")
+  "Simple runner that starts a process and switches to compilation-mode.")
 
 (cl-defmethod runc--runner-run ((runner runc-simple-runner) runnable &optional args)
   (let* ((default-directory (runc--default-dir runnable))
@@ -179,13 +179,28 @@ instead of (concat argument value). Usefull for sending commands to runc.")
          (compile-command (runc--compile-command runnable args)))
     (call-interactively #'compile)))
 
+(defclass runc-comint-runner (runc-i-runner)
+  ()
+  "Runner based on Comint mode.")
+
+(cl-defmethod runc--runner-run ((runner runc-comint-runner) runnable &optional args)
+  (let* ((default-directory (runc--default-dir runnable))
+         (buffname (runc--buffer-name runnable))
+         (program (runc-runnable-program runnable))
+         (args* (runc--args-for-run runnable args))
+         (buff  (runc--initialize-process-buffer runnable)))
+    (with-current-buffer buff
+      (setq buffer-read-only nil))
+    (apply #'make-comint-in-buffer buffname buff program nil args*)
+    (display-buffer buff)))
+
 ;; API
 (defun runc-run (runnable &optional args runner)
   "Runs a runnable."
   (let ((runner* (or runner runc-default-runner (runc-simple-runner))))
     (runc--runner-run runner* runnable args)))
 
-(cl-defmacro runc-def (defname &key program directory name default-args base-args transient)
+(cl-defmacro runc-def (defname &key program directory name default-args base-args transient default-runner)
   "Defines a command.
 
 `defname` - The base name for the functions that will call the command.
@@ -195,6 +210,7 @@ instead of (concat argument value). Usefull for sending commands to runc.")
 `default-args` - Optional default arguments for the program (if no areguments are passed at runtime)
 `base-args` - Optional base arguments, which are always given to `command` before any runtime args.
 `transient` - Optional. If present, the value for this key must be a list containing `transient` groups, just like the vectors given to `transient-define-prefix`.
+`default-runner` - Optional. If specified, must be an instace of `runc-i-runner`. This is the default runner used to execute the command.
 
    This macro will define:
 
@@ -229,10 +245,10 @@ instead of (concat argument value). Usefull for sending commands to runc.")
                                 :name ,name
                                 :default-args ,default-args
                                 :base-args ,base-args))
-     `(defun ,defname (&optional args)
+     `(defun ,defname (&optional args runner)
         ,(s-concat "Runs the runnable with name `" name "`.")
         (interactive)
-        (runc-run ,runnable-symbol args))
+        (runc-run ,runnable-symbol args (or runner ,default-runner)))
      
      (when has-transient?
        `(defun ,run-from-transient-symbol (args)
